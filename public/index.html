@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+</head>
+<body>
+    <div id="app">
+        <div id="1" a="2">
+            <span style="color:red;">{{name}}}</span>
+            <span>haha{{age}}}world</span>
+        </div>
+    </div>
+    <script src="/dist/vue.js"></script>
+    <script>
+        let vm = new Vue({
+            el: '#app',
+            data(){
+                return {name:'zf', age:11, children: [1,2,3, {name:'zf1'}]}
+            }
+        })
+        console.log('vm', vm)
+    </script>
+</body>
+</html>
