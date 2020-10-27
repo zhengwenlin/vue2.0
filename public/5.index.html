@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+</head>
+<body>
+    <div id="app">
+        <ul>
+            <li>{{ arr }}</li>
+            <my-button></my-button>
+            <my-button></my-button>
+            <my-button></my-button>
+        </ul>
+    </div>
+    <script src="/dist/vue.js"></script>
+    <script>
+        Vue.component('my-button', {
+            template: `<button>外部按钮1</button>`
+        })
+        Vue.component('my-button', {
+            template: `<button>外部按钮2</button>`
+        })
+        let vm = new Vue({
+            el: '#app',
+            data(){
+                return {arr: [[1,2,3]]}
+            },
+            //这个属于用户传入的选项
+            
+        })
+       
+    </script>
+</body>
+</html>

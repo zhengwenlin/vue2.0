@@ -10,5 +10,12 @@ export function compileToFunctions(template) {
 
     // 将ast 转换成code
     let code = generate(ast)
-    console.log(code, 'code')
+    
+    // with生成render代码
+    let renderCode = `with(this){ return ${code}}`
+
+    // 生成render函数
+    let fn = new Function(renderCode)
+
+    return fn
 }

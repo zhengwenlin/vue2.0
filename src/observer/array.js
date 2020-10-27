@@ -50,6 +50,8 @@ methods.forEach(method => {
            // 这里的this是什么，数组调用的方法，this指的是数组数据，可以将Observer实例挂载到this上
            ob.observeArray(inserted)
         }
+        //调用了数组的方法，更新视图
+        ob.dep.notify()
         return result;
         
     }

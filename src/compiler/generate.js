@@ -49,22 +49,19 @@ function gen(node){
             while(match = defaultTagRE.exec(text)) {
                 // match[0]匹配到的字符串 1-n 分组结果
                 // index match[0]第一个字符在原字符串中的索引位置
-                console.log(match)
                 index = match.index;
                 if(index > lastIndex){
                    // index > lastIndex 说明没有匹配到，说明是普通文本
-                   debugger
-                   let a;
-                   tokens.push(JSON.stringify(a = text.slice(lastIndex,index)));
-                   console.log(match, '---')
-                   break;
+                   tokens.push(JSON.stringify(text.slice(lastIndex,index)));
                 }
-                
-                console.log('index', match.index)
-                console.log('lastIndex', defaultTagRE.lastIndex)
-                // lastIndex = index + match[0].length;
+                tokens.push(`_s(${match[1].trim()})`)
+                lastIndex = index + match[0].length;
             }
-            
+
+            if(lastIndex < text.length){
+                tokens.push(JSON.stringify(text.slice(lastIndex)))
+            }
+            return `_v(${tokens.join("+")})`
         }else{
             // 普通文本
             return `_v(${JSON.stringify(text)})`
@@ -96,7 +93,7 @@ function genProps(attrs){
 export function generate(el) {
     let code = `_c('${el.tag}', ${
         el.attrs&&el.attrs.length ? genProps(el.attrs): 'undefined'
-    }, ${
+    } ${
         el.children ? (',' + genChilren(el)): ''
     })`
     return code;

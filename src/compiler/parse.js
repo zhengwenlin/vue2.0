@@ -66,10 +66,13 @@ export function parseHTML(html) {
     //处理文本的
     function charts(text){
       text = text.replace(/\s/g, '')
-      currentParent.children.push({
-          type: 3,
-          text
-      })
+      //空文本不做处理
+      if(text){
+        currentParent.children.push({
+            type: 3,
+            text
+        })
+      }
     }
     // 走n步
     function advance(n) {

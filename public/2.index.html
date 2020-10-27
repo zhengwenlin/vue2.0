@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+</head>
+<body>
+    <div id="app">
+        <ul style="background: green;">
+            <li style="color:red">{{name}}</li>
+            <li style="color:red">{{name}}</li>
+            <li>{{age}}</li>
+        </ul>
+    </div>
+    <script src="/dist/vue.js"></script>
+    <script>
+        let vm = new Vue({
+            el: '#app',
+            data(){
+                return {name:'zf', age:11, children: [1,2,3, {name:'zf1'}]}
+            }
+        })
+        setTimeout(() => {
+            vm.name = 'zwl'
+            vm.age = 100
+            vm.$nextTick(() => {
+                console.log(vm.$options.el)
+            })
+            vm.name = 'XXXX'
+            vm.age = 11
+            // vm._update(vm._render()) // 强制更新的方法
+        }, 1000)
+    </script>
+</body>
+</html>

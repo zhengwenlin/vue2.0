@@ -1,7 +1,9 @@
 import arrayMethods from "./array"
-
+import {Dep} from './dep'
 class Observer {
-    constructor(data) {
+    constructor(data) { //data有可能是一个数组
+        //数组的依赖收集
+        this.dep = new Dep()
         //这样写发现死循环了 Maximum call stack size exceeded
         //因为data多了一个__ob__属性，walk的时候，循环data，ob是一个对象，又new Observer，又走walk，又
         //有一个__ob__，就死循环了
@@ -44,12 +46,41 @@ class Observer {
     }
 }
 
+function dependArray(value){
+    for(let i = 0; i < value.length; i++){
+        let current = value[i]
+        //如果有__ob__属性，说明是对象或者数组，也要收集依赖
+        current.__ob__ && current.__ob__.dep.depend()
+
+        //如果这个元素是数组，递归收集
+        if(Array.isArray(current)){
+            dependArray(current)
+        }
+    }
+}
+
 // 将一个对象定义成响应式（Object.defineProperty）
 export function defineReactive(obj, key, value) {
     // value可能是对象
-    observe(value)
+    let childOb = observe(value) //observer的实例
+    let dep = new Dep() // 给每个属性都创建一个dep，用于收集依赖
     Object.defineProperty(obj, key, {
         get() {
+            //渲染的时候，js单线程机制，模板渲染会进行取值操作，走get方法
+            //让这个属性key能记住这个watcher
+            if(Dep.target){
+                // 对对象进行依赖收集,将Dep.target这个渲染watcher放到这个dep中
+                dep.depend() //让这个属性自己的dep记住这个watcher，也要让watcher记住这个dep
+                
+                if(childOb){ //收集数组或者对象本身的依赖 {arr:[]}
+                    childOb.dep.depend()
+                    //如果元素中也有数组，也要递归收集，将元素的依赖收集起来
+                    if(Array.isArray(value)){
+                        dependArray(value)
+                    }
+                }
+                
+            }
             return value;
         },
         set(newVal) {
@@ -59,6 +90,8 @@ export function defineReactive(obj, key, value) {
             // 设置的值可能是对象
             observe(newVal)
             value = newVal;
+
+            dep.notify()
         }
     })
 }
