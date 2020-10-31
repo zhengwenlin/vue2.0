@@ -8,8 +8,15 @@ export function lifecycleMixin(Vue) {
     //将虚拟dom转换成真实dom渲染到页面
     Vue.prototype._update = function (vnode) {
         let vm = this;
-        // vm.$el是真实dom节点
-        vm.$el = patch(vm.$el, vnode)
+        const prevVnode = vm._vnode; // 保留上一次的vnode
+        vm._vnode = vnode;
+
+        if(!prevVnode){
+            // vm.$el是真实dom节点
+            vm.$el = patch(vm.$el, vnode)
+        }else{
+            vm.$el = patch(prevVnode,vnode); // 更新时做diff操作
+        }
     }
 }
 

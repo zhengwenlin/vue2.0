@@ -689,8 +689,62 @@
     return Watcher;
   }();
 
-  // 创建组件的真实元素
-  function createComponent(vnode) {
+  function createElement(vm, tag) {
+    var data = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : {};
+
+    for (var _len = arguments.length, children = new Array(_len > 3 ? _len - 3 : 0), _key = 3; _key < _len; _key++) {
+      children[_key - 3] = arguments[_key];
+    }
+
+    // 这里的tag有可能是个组件，要区分是组件还是原生标签
+    if (isReservedTag(tag)) {
+      return vnode(vm, tag, data, data.key, children, undefined);
+    } else {
+      var Ctor = vm.$options.components[tag];
+      return createComponent(vm, tag, data, data.key, children, Ctor);
+    }
+  }
+
+  function createComponent(vm, tag, data, key, children, Ctor) {
+    // Ctor有可能是一个对象或者函数
+    if (isObject(Ctor)) {
+      Ctor = vm.$options._base.extend(Ctor);
+    } // 给组件的虚拟dom的属性上添加一个hook生命周期方法
+
+
+    data.hook = {
+      init: function init(vnode) {
+        var child = vnode.componentInstance = new vnode.componentOptions.Ctor({});
+        child.$mount();
+      }
+    };
+    return vnode(vm, "vue-component-".concat(Ctor.cid, "-").concat(tag), data, key, undefined, undefined, {
+      Ctor: Ctor
+    });
+  }
+
+  function createTextNode(vm, text) {
+    return vnode(vm, undefined, undefined, undefined, undefined, text);
+  }
+
+  function vnode(vm, tag, data, key, children, text, componentOptions) {
+    return {
+      vm: vm,
+      tag: tag,
+      data: data,
+      key: key,
+      children: children,
+      text: text,
+      componentOptions: componentOptions
+    };
+  } // tag和key一样说明是一个虚拟节点
+
+
+  function isSameVnode(oldVnode, newVnode) {
+    return oldVnode.tag === newVnode.tag && oldVnode.key === newVnode.key;
+  }
+
+  function createComponent$1(vnode) {
     var i = vnode.data;
 
     if ((i = i.hook) && (i = i.init)) {
@@ -702,7 +756,8 @@
     }
 
     return false;
-  }
+  } // 给vnode虚拟节点创建真实节点，并且可以通过vnode.el获取到真实的节点
+
 
   function createElm(vnode) {
     var tag = vnode.tag,
@@ -714,7 +769,7 @@
 
     if (typeof tag === 'string') {
       //可能是组件，也可能是普通的元素
-      if (createComponent(vnode)) {
+      if (createComponent$1(vnode)) {
         // 返回组件的真实dom节点
         return vnode.componentInstance.$el;
       } //创建标签
@@ -737,24 +792,149 @@
   }
 
   function updateProperties(vnode) {
-    var tag = vnode.tag,
-        data = vnode.data,
-        key = vnode.key,
-        children = vnode.children,
-        text = vnode.text,
-        vm = vnode.vm;
-    var elm = vnode.el;
-    Object.keys(data).forEach(function (key) {
+    var oldProps = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {};
+    var newProps = vnode.data || {};
+    var elm = vnode.el; // 1. 老的有，新的没有，干掉老的
+
+    for (var key in oldProps) {
+      if (!newProps[key]) {
+        //移除老的属性
+        elm.removeAttribute(key);
+      }
+    } //2. style一样
+
+
+    var oldStyle = oldProps.style || {};
+    var newStyle = newProps.style || {};
+
+    for (var _key in oldStyle) {
+      if (!newStyle[_key]) {
+        elm.style[_key] = '';
+      }
+    } //添加新的属性
+
+
+    Object.keys(newProps).forEach(function (key) {
       if (key === 'style') {
-        for (var styleName in data['style']) {
-          elm.style[styleName] = data['style'][styleName];
+        for (var styleName in newProps['style']) {
+          elm.style[styleName] = newProps['style'][styleName];
         }
       } else if (key === 'class') {
-        elm.className = data['class'];
+        elm.className = newProps['class'];
       } else {
-        elm.setAttribute(key, data[key]);
+        elm.setAttribute(key, newProps[key]);
       }
     });
+  }
+
+  function updateChildren(parent, oldChildren, newChildren) {
+    // vue中的diff都是同层节点的比对
+    // vue中的diff采用的是双指针的方式进行比较
+    // 1.创建双指针
+    var oldStartIndex = 0;
+    var oldEndIndex = oldChildren.length - 1;
+    var oldStartVnode = oldChildren[0];
+    var oldEndVnode = oldChildren[oldChildren.length - 1];
+    var newStartIndex = 0;
+    var newEndIndex = newChildren.length - 1;
+    var newStartVnode = newChildren[0];
+    var newEndVnode = newChildren[newChildren.length - 1]; // 因为乱序对比时，要看新的虚拟节点在老的中有没有，所以要创建一个老的key-index的映射表
+    // 通过key可以取到index，从而获取到这个vnode
+
+    function mkIndexByKey() {
+      var oldChildren = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : [];
+      var map = {};
+      oldChildren.forEach(function (child, index) {
+        map[child.key] = index;
+      });
+      return map;
+    }
+
+    var map = mkIndexByKey(oldChildren); // 2.不停的移动使用while循环，
+    // 条件是 oldStartIndex <= oldEndIndex && newStartIndex <= newEndIndex
+
+    while (oldStartIndex <= oldEndIndex && newStartIndex <= newEndIndex) {
+      // diff的优化策略
+      // 向后插入，向前插入，头移动到尾，尾移动到头部，正序和反序
+      if (!oldStartVnode) {
+        oldStartVnode = oldChildren[++oldStartIndex];
+      } else if (!oldEndVnode) {
+        oldEndVnode = oldChildren[--oldEndIndex];
+      } else if (isSameVnode(oldStartVnode, newStartVnode)) {
+        //1. 向后插入  ABCD -> ABCDE
+        // 如果是相同的元素，老的指针和新的指针都往后移动
+        // 调用patch，比较属性和儿子
+        patch(oldStartVnode, newStartVnode); //指针向后移动
+
+        oldStartVnode = oldChildren[++oldStartIndex];
+        newStartVnode = newChildren[++newStartIndex];
+      } else if (isSameVnode(oldEndVnode, newEndVnode)) {
+        //2. 向前插入 ABCD -> EABCD
+        // 调用patch，比较属性和儿子
+        patch(oldEndVnode, newEndVnode); //指针向后移动
+
+        oldEndVnode = oldChildren[--oldEndIndex];
+        newEndVnode = newChildren[--newEndIndex];
+      } else if (isSameVnode(oldStartVnode, newEndVnode)) {
+        // 3. 头移动尾部
+        patch(oldStartVnode, newEndVnode); // 将老的开始的节点的元素插入到尾指针的下一个节点的前边
+
+        parent.insertBefore(oldStartVnode.el, oldEndVnode.el.nextSibiling); // 老的开始的指针向后移动，新的结束指针向前移动
+
+        oldStartVnode = oldChildren[++oldStartIndex];
+        newEndVnode = newChildren[--newEndIndex];
+      } else if (isSameVnode(oldEndVnode, newStartVnode)) {
+        // 4. 尾部移动头部
+        patch(oldEndVnode, newStartVnode); // 将老的节点的结束节点移动到老的头部前边
+
+        parent.insertBefore(oldEndVnode.el, oldStartVnode.el);
+        oldEndVnode = oldChildren[--oldEndIndex];
+        newStartVnode = newChildren[++newStartIndex];
+      } else {
+        // 乱序比对
+        // 头和头、尾和尾 、头和尾、尾和头 都不一样，就使用乱序比对
+        // 乱序比对： 看看新的节点中，老的中有没有，有的话就复用，没有就创建新的
+        // 看看老的中有没有
+        var moveIndex = map[newStartVnode.key];
+
+        if (moveIndex === undefined) {
+          // 老的中没有，就创建新的，插入到老的开始位置的前边
+          parent.insertBefore(createElm(newStartVnode), oldStartVnode.el);
+        } else {
+          // 老的中有，就移动老的节点，将原来的重置为null空
+          var moveIndexVnode = oldChildren[moveIndex]; // 要移动的节点
+
+          oldChildren[moveIndex] = undefined;
+          patch(moveIndexVnode, newStartVnode); // 复用老的节点，继续patch
+
+          parent.insertBefore(moveIndexVnode.el, oldStartVnode.el);
+        } //新的start指针移动
+
+
+        newStartVnode = newChildren[++newStartIndex];
+      }
+    } //如果新的多，要插入
+
+
+    if (newStartIndex <= newEndIndex) {
+      for (var i = newStartIndex; i <= newEndIndex; i++) {
+        var nextEle = newChildren[newEndIndex + 1] == null ? null : newChildren[newEndIndex + 1].el; // appendChild 和 insertBefore 也可以进行合并
+        // 如果insertBefore 传入null 等价于appendChild
+
+        parent.insertBefore(createElm(newChildren[i]), nextEle);
+      }
+    } //如果老的多，要删除
+
+
+    if (oldStartIndex <= oldEndIndex) {
+      for (var _i = oldStartIndex; _i <= oldEndIndex; _i++) {
+        var current = oldChildren[_i];
+
+        if (current != undefined) {
+          parent.removeChild(child.el);
+        }
+      }
+    }
   }
 
   function patch(oldVnode, vnode) {
@@ -777,6 +957,42 @@
       parentNode.removeChild(oldElm); //返回新的节点
 
       return el;
+    } else {
+      //diff
+      // 1. 如果标签名都不一样，就不用比了，直接干掉老的，插入新的
+      if (oldVnode.tag !== vnode.tag) {
+        return oldVnode.el.parentNode.replaceChild(createElm(vnode), oldVnode.el);
+      } // 2. 如果标签名相同，可能是文本 text: {tag:undefined}
+      // 文本内容不一样，用新的替换老的
+
+
+      if (!oldVnode.tag) {
+        if (oldVnode.text !== vnode.text) {
+          return oldVnode.el.textContent = vnode.text;
+        }
+      } //3. 都是元素，标签名字相同，就复用老的节点
+
+
+      var _el = vnode.el = oldVnode.el;
+
+      console.log(_el, '**el**'); //属性可能不一样，老的属性和新的节点比对
+
+      updateProperties(vnode, oldVnode.data); //4. 更新儿子
+
+      var oldChildren = oldVnode.children || [];
+      var newChildren = vnode.children || []; // 1. 如果老的有儿子，新的也有 diff算法
+
+      if (oldChildren.length > 0 && newChildren.length > 0) {
+        updateChildren(_el, oldChildren, newChildren);
+      } else if (oldChildren.length > 0) {
+        // 2. 如果老的有儿子，新的没有，直接干掉老的
+        oldVnode.el.innerHTML = '';
+      } else if (newChildren.length > 0) {
+        // 3. 如果老的没有儿子，新的有儿子，插入新的儿子
+        newChildren.forEach(function (child) {
+          return _el.appendChild(createElm(child));
+        });
+      }
     }
   }
 
@@ -784,9 +1000,17 @@
   function lifecycleMixin(Vue) {
     //将虚拟dom转换成真实dom渲染到页面
     Vue.prototype._update = function (vnode) {
-      var vm = this; // vm.$el是真实dom节点
+      var vm = this;
+      var prevVnode = vm._vnode; // 保留上一次的vnode
 
-      vm.$el = patch(vm.$el, vnode);
+      vm._vnode = vnode;
+
+      if (!prevVnode) {
+        // vm.$el是真实dom节点
+        vm.$el = patch(vm.$el, vnode);
+      } else {
+        vm.$el = patch(prevVnode, vnode); // 更新时做diff操作
+      }
     };
   } // 渲染靠的是watcher  - 渲染watcher
 
@@ -1037,8 +1261,7 @@
       // vm.$options保存的是用户传入的选项
       //将合并后的生命周期啥的配置项和用户传入的options合并，保存到了vm.$options上
 
-      vm.$options = mergeOptions(vm.constructor.options, options);
-      console.log(vm.$options, 'vm.$options'); //初始化状态前 beforeCreate
+      vm.$options = mergeOptions(vm.constructor.options, options); //初始化状态前 beforeCreate
 
       callHook(vm, 'beforeCreate'); //初始化状态有很多
 
@@ -1080,56 +1303,6 @@
 
 
       mountComponent(vm);
-    };
-  }
-
-  function createElement(vm, tag) {
-    var data = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : {};
-
-    for (var _len = arguments.length, children = new Array(_len > 3 ? _len - 3 : 0), _key = 3; _key < _len; _key++) {
-      children[_key - 3] = arguments[_key];
-    }
-
-    // 这里的tag有可能是个组件，要区分是组件还是原生标签
-    if (isReservedTag(tag)) {
-      return vnode(vm, tag, data, data.key, children, undefined);
-    } else {
-      var Ctor = vm.$options.components[tag];
-      return createComponent$1(vm, tag, data, data.key, children, Ctor);
-    }
-  }
-
-  function createComponent$1(vm, tag, data, key, children, Ctor) {
-    // Ctor有可能是一个对象或者函数
-    if (isObject(Ctor)) {
-      Ctor = vm.$options._base.extend(Ctor);
-    } // 给组件的虚拟dom的属性上添加一个hook生命周期方法
-
-
-    data.hook = {
-      init: function init(vnode) {
-        var child = vnode.componentInstance = new vnode.componentOptions.Ctor({});
-        child.$mount();
-      }
-    };
-    return vnode(vm, "vue-component-".concat(Ctor.cid, "-").concat(tag), data, key, undefined, undefined, {
-      Ctor: Ctor
-    });
-  }
-
-  function createTextNode(vm, text) {
-    return vnode(vm, undefined, undefined, undefined, undefined, text);
-  }
-
-  function vnode(vm, tag, data, key, children, text, componentOptions) {
-    return {
-      vm: vm,
-      tag: tag,
-      data: data,
-      key: key,
-      children: children,
-      text: text,
-      componentOptions: componentOptions
     };
   }
 
@@ -1175,7 +1348,6 @@
     //Vue.component方法内部调用的Vue.extend方法，传入对象，返回组件的构造函数
 
     Vue.component = function (id, definition) {
-      debugger;
       definition.name = definition.name || id; //调用extend方法，返回组件的构造函数
 
       definition = this.options._base.extend(definition); //将组件的构造函数保存到Vue.options.components对象中
@@ -1186,7 +1358,6 @@
     var cid = 0;
 
     Vue.extend = function (options) {
-      debugger;
       var Super = this; //Super指向Vue
       //创建Vue子类的构造函数
 

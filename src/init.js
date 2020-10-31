@@ -10,7 +10,6 @@ export function initMixin(Vue) {
         // vm.$options保存的是用户传入的选项
         //将合并后的生命周期啥的配置项和用户传入的options合并，保存到了vm.$options上
         vm.$options = mergeOptions(vm.constructor.options,options)
-        console.log(vm.$options,'vm.$options')
         //初始化状态前 beforeCreate
         callHook(vm, 'beforeCreate')
         

@@ -43,3 +43,7 @@ function vnode(vm, tag, data, key, children, text, componentOptions){
         componentOptions
     }
 }
+// tag和key一样说明是一个虚拟节点
+export function isSameVnode(oldVnode, newVnode){
+    return oldVnode.tag === newVnode.tag && oldVnode.key === newVnode.key
+}
